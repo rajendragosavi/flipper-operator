@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mesh-deployment
+  name: wrong-label-deployment
   namespace: mesh
   labels:
     mesh: "true"
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       mesh: "true"

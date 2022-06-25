@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	flipperv1alpha1 "github.com/rajendragosavi/flipper-operator/api/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -53,9 +54,6 @@ func (r *FlipperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	fmt.Printf("REQUEST - %+v \n", req)
 
-	//var deployment appsv1.Deployment
-	// var deploymentList appsv1.DeploymentList
-
 	var flipper flipperv1alpha1.Flipper
 	err := r.Client.Get(ctx, req.NamespacedName, &flipper)
 	if err != nil {
@@ -71,9 +69,33 @@ func (r *FlipperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	log.Info("Flipper object - ", "OBJECT ", flipper)
 
-	// TODO(user): your logic here
+	//cvar deployment appsv1.Deployment
+	ns := flipper.Spec.Match.Namespace
+	filterLable := flipper.Spec.Match.Labels
+	var deploymentList = &appsv1.DeploymentList{}
+
+	listOpts := []client.ListOption{
+		client.InNamespace(ns),
+		client.MatchingLabels(filterLable),
+	}
+	err = r.Client.List(ctx, deploymentList, listOpts...)
+	if err != nil {
+		log.Error(err, "failed to list the deployments in ", "Namespace ", ns)
+		return ctrl.Result{}, err
+	}
+	names := getDeploymentNames(deploymentList.Items)
+	log.Info("", "deployment - ", names)
 
 	return ctrl.Result{}, nil
+}
+
+// getDeploymentNames returns the deployment names
+func getDeploymentNames(deployments []appsv1.Deployment) []string {
+	var deploymentNames []string
+	for _, deployment := range deployments {
+		deploymentNames = append(deploymentNames, deployment.Name)
+	}
+	return deploymentNames
 }
 
 // SetupWithManager sets up the controller with the Manager.
