@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mesh-deployment
+  namespace: mesh
+  labels:
+    mesh: "true"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      mesh: "true"
+  template:
+    metadata:
+      labels:
+        mesh: "true"      
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
