@@ -76,7 +76,6 @@ func main() {
 	// 	os.Exit(1)
 	// }
 
-	// t1 := time.Duration(60) * time.Second // FOR TESTING....
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -84,8 +83,6 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "b962ad32.dev.io",
-		// SyncPeriod:             &duration, // this is custom sync period
-		// SyncPeriod: &t1,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

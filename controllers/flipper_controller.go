@@ -18,17 +18,19 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	flipperv1alpha1 "github.com/rajendragosavi/flipper-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // FlipperReconciler reconciles a Flipper object
@@ -54,8 +56,6 @@ func (r *FlipperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	log := log.FromContext(ctx)
 	log.Info("Reconciling......")
 
-	fmt.Printf("REQUEST - %+v \n", req)
-
 	var flipper flipperv1alpha1.Flipper
 	err := r.Client.Get(ctx, req.NamespacedName, &flipper)
 	if err != nil {
@@ -71,10 +71,11 @@ func (r *FlipperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	log.Info("Flipper object - ", "OBJECT ", flipper)
 
+	flipper.Status.Status = "available"
+
 	ns := flipper.Spec.Match.Namespace
 	filterLable := flipper.Spec.Match.Labels
 	interval, _ := time.ParseDuration(flipper.Spec.Interval)
-	fmt.Println("INTERVAL - ", interval)
 	var deploymentList = &appsv1.DeploymentList{}
 
 	listOpts := []client.ListOption{
@@ -93,34 +94,54 @@ func (r *FlipperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		err = r.RollOutDeployment(ctx, name, ns)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				// return ctrl.Result{RequeueAfter: interval}, nil // what should we do here ?
 				log.Info("Deployment object not found.", "Deployment Name", names[0], "Namespace", ns)
-				// return ctrl.Result{}, err
 			}
 		} else {
 			log.Info("SUCCESSFULLY ROLLED OUT THE DEPLOYMENT!!!!")
-			/// return ctrl.Result{RequeueAfter: time.Minute * 5}, nil
 		}
 	}
+
+	var finalStatus = make([]flipperv1alpha1.Deployments, 0)
+
+	err = r.Client.List(ctx, deploymentList, listOpts...)
+	if err != nil {
+		log.Error(err, "failed to list the deployments in ", "Namespace ", ns)
+		return ctrl.Result{}, err
+	}
+	for _, dep := range deploymentList.Items {
+		var depStatus flipperv1alpha1.Deployments
+		depStatus.Name = dep.ObjectMeta.Name
+		depStatus.LastRolloutTime = dep.Spec.Template.ObjectMeta.Annotations["restartedAt"]
+		finalStatus = append(finalStatus, depStatus)
+	}
+	flipper.Status.Deployments = finalStatus
+
+	err = r.Status().Update(ctx, &flipper)
+	if err != nil {
+		log.Error(err, "erron in updating status", "Name", flipper.ObjectMeta.Name)
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{RequeueAfter: interval.Round(interval)}, nil
 }
 
 func (r *FlipperReconciler) RollOutDeployment(ctx context.Context, deploymentName string, namespace string) error {
-	fmt.Printf("ROLLING OUT DEPLOYMENT - %+v ", deploymentName)
+	log.Log.Info("ROLLING OUT DEPLOYMENT")
 	var existingDeployment = appsv1.Deployment{}
 	err := r.Client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: namespace}, &existingDeployment)
 	if err != nil {
-		fmt.Printf("ERRRROR in ROLLING RESTART - %+v \n", err)
+		log.Log.Error(err, "error getting deployment object.", "Name", deploymentName)
 		return err
 	}
 	// A merge patch will preserve other fields modified at runtime.
 	patch := client.MergeFrom(existingDeployment.DeepCopy())
 	updatedMap := make(map[string]string)
-	updatedMap["restartedAt"] = time.Now().UTC().String()
+
+	updatedMap["restartedAt"] = metav1.Now().UTC().String()
 	existingDeployment.Spec.Template.ObjectMeta.Annotations = updatedMap
 	err = r.Patch(ctx, &existingDeployment, patch)
 	if err != nil {
-		fmt.Printf("ERRRROR in ROLLING RESTART - %+v \n", err)
+		log.Log.Error(err, "error patching deployment", "name", deploymentName)
 		return err
 	}
 	return nil
@@ -138,6 +159,21 @@ func getDeploymentNames(deployments []appsv1.Deployment) []string {
 // SetupWithManager sets up the controller with the Manager.
 func (r *FlipperReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&flipperv1alpha1.Flipper{}).
-		Complete(r)
+		For(&flipperv1alpha1.Flipper{}).WithEventFilter(predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldGeneration := e.ObjectOld.GetGeneration()
+			newGeneration := e.ObjectNew.GetGeneration()
+			// Generation is only updated on spec changes (also on deletion),
+			// not metadata or status
+			// Filter out events where the generation hasn't changed to
+			// avoid being triggered by status updates
+			return oldGeneration != newGeneration
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			// The reconciler adds a finalizer so we perform clean-up
+			// when the delete timestamp is added
+			// Suppress Delete events to avoid filtering them out in the Reconcile function
+			return false
+		},
+	}).Complete(r)
 }
