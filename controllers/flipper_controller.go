@@ -71,9 +71,10 @@ func (r *FlipperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	log.Info("Flipper object - ", "OBJECT ", flipper)
 
-	//cvar deployment appsv1.Deployment
 	ns := flipper.Spec.Match.Namespace
 	filterLable := flipper.Spec.Match.Labels
+	interval, _ := time.ParseDuration(flipper.Spec.Interval)
+	fmt.Println("INTERVAL - ", interval)
 	var deploymentList = &appsv1.DeploymentList{}
 
 	listOpts := []client.ListOption{
@@ -88,18 +89,24 @@ func (r *FlipperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	names := getDeploymentNames(deploymentList.Items)
 	log.Info("", "deployment - ", names)
 
-	err = r.RollOutDeployment(ctx, names[0], ns)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return ctrl.Result{Requeue: true}, nil // what should we do here ?
+	for _, name := range names {
+		err = r.RollOutDeployment(ctx, name, ns)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// return ctrl.Result{RequeueAfter: interval}, nil // what should we do here ?
+				log.Info("Deployment object not found.", "Deployment Name", names[0], "Namespace", ns)
+				// return ctrl.Result{}, err
+			}
+		} else {
+			log.Info("SUCCESSFULLY ROLLED OUT THE DEPLOYMENT!!!!")
+			/// return ctrl.Result{RequeueAfter: time.Minute * 5}, nil
 		}
 	}
-	fmt.Printf("SUCCESSFULLY ROLLED OUT THE DEPLOYMENT!!!!")
-
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: interval.Round(interval)}, nil
 }
 
 func (r *FlipperReconciler) RollOutDeployment(ctx context.Context, deploymentName string, namespace string) error {
+	fmt.Printf("ROLLING OUT DEPLOYMENT - %+v ", deploymentName)
 	var existingDeployment = appsv1.Deployment{}
 	err := r.Client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: namespace}, &existingDeployment)
 	if err != nil {
@@ -109,7 +116,7 @@ func (r *FlipperReconciler) RollOutDeployment(ctx context.Context, deploymentNam
 	// A merge patch will preserve other fields modified at runtime.
 	patch := client.MergeFrom(existingDeployment.DeepCopy())
 	updatedMap := make(map[string]string)
-	updatedMap["rolling-at"] = time.Now().String()
+	updatedMap["restartedAt"] = time.Now().UTC().String()
 	existingDeployment.Spec.Template.ObjectMeta.Annotations = updatedMap
 	err = r.Patch(ctx, &existingDeployment, patch)
 	if err != nil {

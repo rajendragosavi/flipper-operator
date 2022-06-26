@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wrong-label-deployment
+  name: wrong-label-deployment-2
   namespace: mesh
   labels:
     mesh: "true"
