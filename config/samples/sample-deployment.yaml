@@ -6,15 +6,17 @@ metadata:
   labels:
     mesh: "true"
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       mesh: "true"
   template:
     metadata:
       labels:
-        mesh: "true"      
+        mesh: "true"
     spec:
       containers:
       - name: nginx
         image: nginx:1.14.2
+        ports:
+        - containerPort: 80

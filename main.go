@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -55,7 +54,7 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
-	var syncPeriod string //TODO - will come back to this flag later.
+	// var syncPeriod string //TODO - will come back to this flag later.
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -64,7 +63,7 @@ func main() {
 	opts := zap.Options{
 		Development: true,
 	}
-	flag.StringVar(&syncPeriod, "sync-period", "10m", "interval at which the matched deployments should be rotated(default is 10m)")
+	// flag.StringVar(&syncPeriod, "sync-period", "10m", "interval at which the matched deployments should be rotated(default is 10m)")
 
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -77,7 +76,6 @@ func main() {
 	// 	os.Exit(1)
 	// }
 
-	t1 := time.Duration(60) * time.Second // FOR TESTING....
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -85,8 +83,6 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "b962ad32.dev.io",
-		// 	SyncPeriod:             &duration, // this is custom sync period
-		SyncPeriod: &t1,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

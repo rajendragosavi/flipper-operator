@@ -25,8 +25,6 @@ import (
 
 // FlipperSpec defines the desired state of Flipper
 type FlipperSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	Interval string   `json:"interval,omitempty"`
 	Match    MatchRef `json:"match,omitempty"`
 }
@@ -38,8 +36,13 @@ type MatchRef struct {
 
 // FlipperStatus defines the observed state of Flipper
 type FlipperStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Status      string        `json:"status,omitempty"`
+	Deployments []Deployments `json:"deployments,omitempty"`
+}
+
+type Deployments struct {
+	Name            string `json:"name,omitempty"`
+	LastRolloutTime string `json:"lastRolledOutTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true
